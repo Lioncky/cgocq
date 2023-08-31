@@ -1,6 +1,7 @@
 # CGoCQ
 对gocqhttp进行了全面的C++封装 并提供了易++的接口 
 特供Windows Server 不支持其他操作系统
+*注意 此项目目前仍于开发中 不可直接使用*
 
 ## 为什么基于go
 go提供了良好的网络库 gocq虽然基于mirai但为原生协议实现 效率不输于mirai
@@ -24,6 +25,6 @@ GoCQ配置 [gocqhttp](https://github.com/Mrs4s/go-cqhttp#readme) **快照基于2
 # 未来 Future
 - [x] 基于std::map实现的原生AsyncWebsocket接口
 - [x] 基于Win32的原生跨进程通讯服务
-- [] 对Lua提供间接或直接性的支持
-- [] 更详细的事件划分 对易++提供更多的支持
-- [] 更具体的细节实现
+- [ ] 对Lua提供间接或直接性的支持
+- [ ] 更详细的事件划分 对易++提供更多的支持
+- [ ] 更具体的细节实现
