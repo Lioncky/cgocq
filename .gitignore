@@ -1,0 +1,9 @@
+
+# Visual Studio 2022 cache/options directory
+*.aps
+.vs/
+
+# Global Ignore
+Bin
+
+# Other Details
