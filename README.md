@@ -4,8 +4,8 @@
 *注意 此项目目前仍于开发中 不可直接使用*  
 
 ## 为什么基于go
-go提供了良好的网络库 gocq虽然基于mirai但为原生协议实现 效率不输于mirai
-另外这个项目已经存在好几年了 也还是比较稳定的 
+go提供了良好的网络库 gocq虽然基于mirai但为原生协议实现 效率不输于mirai  
+另外这个项目已经存在好几年了 也还是比较稳定的  
 
 # 使用 Use
 GoCQ配置 [gocqhttp](https://github.com/Mrs4s/go-cqhttp#readme) **快照基于2023/08/30**
@@ -17,14 +17,15 @@ GoCQ配置 [gocqhttp](https://github.com/Mrs4s/go-cqhttp#readme) **快照基于2
 > 
 
 ## 反向 WndCilent
-> 通过挂载Win32原生的窗口事件实现异步跨进程数据通讯
-> 当前仅支持OneBot完全模式 日后可能划分到具体事件代码
-> 通过修改cgo.ini来配置此项
+> 通过挂载Win32原生的窗口事件实现异步跨进程数据通讯  
+> 当前仅支持OneBot完全模式 日后可能划分到具体事件代码  
+> 通过修改cgo.ini来配置此项  
 > 
 
 # 未来 Future
 - [x] 基于std::map实现的原生AsyncWebsocket接口
 - [x] 基于Win32的原生跨进程通讯服务
-- [ ] 对Lua提供间接或直接性的支持
-- [ ] 更详细的事件划分 对易++提供更多的支持
+- [ ] 对Lua提供直接或间接性的支持 C<-->Lua
+- [ ] 对易++提供更多细节的支持
+- [ ] 更详细的事件划分 
 - [ ] 更具体的细节实现
