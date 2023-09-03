@@ -98,6 +98,9 @@
   <ItemGroup>
     <ClInclude Include="Main\CQdefine.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Bin\cgo.ini" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

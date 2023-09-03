@@ -1,69 +1,104 @@
-﻿//#include <concurrent_unordered_map.h>
-
-#include <map>
+﻿#include <map>
 #include <WinWs.h>
 #include "CQdefine.h"
-#define CQ_LOCAL 1
-#define CQ_POST "127.0.0.1:5700"
-#define CQ_HOST 123
 
-class CGo : public WSocket
-{
+class CGo : public WSocket {
 public: 
-	CGo() :m_postcode(0), m_wscilentport(0) {}
+	CGo() :m_postcode(0), m_wscilentport(0), m_hostnumber(0) {}
+	long long gethost() { return this->m_hostnumber; }
 
+	bool StartService(long long host, int port) {
+		this->m_hostnumber = host;
+		this->m_wscilentport = port;
+		return this->Listen(port);
+	}
 	void Reconnected() override {
 		this->Upgrade(); 
 	}
 	void UpgradeWs() override{
-		CAS(einfunc "CQ_WebSocket ON:%d", m_wscilentport);
+		CAS("Upgrade successful~-> Host [WS://127.0.0.1:%d]", m_wscilentport);
 	}
 	void RecvWs(PCSTR sMsg, INT szMsg) override {
 
-		if (*sMsg == '{') {
-			WDS(FMTM "WS_CQ_Recv(%u) -> \n%s", _FMTM, szMsg, sMsg);
-
-			Json _;
-			if (!_.parse(sMsg, szMsg)) {
-				CAF(einfunc "Json Parse failed...%d->%s", szMsg, sMsg);
-				dbk(einfunc);
-				return;
-			}
-
-			if (_.has("wording")) { // wording
-				CAF(FMTM einfunc "[%s]%s|%s", _FMTM, *_["echo"], *_["msg"], *_["wording"]);
-				DAA(sMsg);
-				return;
-			}
-			 
-			if (_.has("echo")) {
-				WAS("CQ::Echo->%s", sMsg);
-				this->InsResult(_["echo"], _["message"]);
-
-				if ((int)_["retcode"] == 0) {
-					DDS(FMTM "[%s]=>Success!", _FMTM, *_["echo"]);
-				}
-				else {
-					CAW(FMTM "[%s]=>%s!", _FMTM, *_["echo"], *_["message"]);
-				}
-				return;
-			}
-
-			if (_.has("post_type")) {
-				if (_["post_type"] == "meta_event") {
-					DAS("CQ has received meta_event !!!\n");
-					return;
-				}
-				if (_["post_type"] == "notice") {
-					CAS("NOTICE=>%s", sMsg);
-					return;
-				}
-				return;
-			}
-			DAF(einfunc "[%s]No post_type!", sMsg);			
+		if (*sMsg != '{') {
+			CAF("Unk_%d->%s", szMsg, sMsg);
 			return;
 		}
-		CAF("Unk_%d->%s", szMsg, sMsg);
+
+		// 配置转发Wnd 待更新
+		// ...
+
+		Json _;
+		WDS(FMTM "WS_CQ_Recv(%u) -> \n%s", _FMTM, szMsg, sMsg);
+		if (!_.parse(sMsg, szMsg)) {
+			CAF(einfunc "Json Parse failed...%d->%s", szMsg, sMsg);
+			dbk(einfunc);
+			return;
+		}
+
+		if (_.has("echo")) {
+			int iResult = _["retcode"];
+
+			WAS("CQ::Echo->[%d]%s", iResult, sMsg);
+			if (_["echo"] == "get_msg") { // 撤回消息的回调
+				if (iResult == CQRET_OK) { // CQRET_MsgNotFound
+					// do some thing
+				}
+				return;
+			}
+
+			if (iResult == CQRET_OK) {
+				WDS(FMTM "[%s]=>成功 Success!", _FMTM, *_["echo"]);
+			}
+			else if (iResult == CQRET_Async) {
+				WDS(FMTM "[%s]=>已推送到异步任务 Had post to async task lists!", _FMTM, *_["echo"]);
+			}
+			else {
+				if (_.has("wording")) { // wording 调用API失败
+					CAF(FMTM "[%s 调用失败]%s|%s|%s", _FMTM, *_["echo"], *_["msg"], *_["wording"], *_["retcode"]);
+					WDA(sMsg); dbk(einfunc);
+					return;
+				}
+				CAW(FMTM "[%s]=>%s!", _FMTM, *_["echo"], *_["message"]);
+			}
+			return;
+		}
+
+		if (!_.has("post_type")) {
+			CAW(einfunc "[%s]字段缺少post_type !", sMsg);
+			return;
+		}
+
+		// 消息事件
+		if (_["post_type"] == "message") {
+			Json& sender = _["sender"];
+			bool group_message = _["message"] == "group";
+
+			return;
+		}
+
+		// 通知事件
+		if (_["post_type"] == "notice") {
+			CAS("NOTICE=>%s", sMsg);
+			auto& notice_type = _["notice_type"]; // 撤回回调 
+
+			if (notice_type == "group_recall" || notice_type == "friend_recall") {
+				// 直接调用get_msg获取消息内容
+				CQ.SendWes(ESTR(R"({
+					"echo": "get_msg",
+					"action": "get_msg",
+					"params": {
+						"message_id": %Id
+					})", (long long)_["message_id"]));
+				return;
+			}
+		}
+
+		// 心跳事件
+		if (_["post_type"] == "meta_event") {
+			DAS("CQ has received meta_event !!!\n");
+			return;
+		}
 	}
 
 	size_t Post(PCSTR action, ESTR param) {
@@ -72,40 +107,22 @@ public:
 		return postcode;
 	}
 
-	size_t QCode() {
-		AutoLocker _(lk_postcode);
-		return m_postcode++;
-	}
-
-	void InsResult(size_t iid, PCSTR infos) {
-		AutoLocker _(this->lk_result);
-		m_result[iid] = infos;
-	}
-	bool IsResultDone(size_t iid) {
-		AutoLocker _(this->lk_result);
-		return m_result.find(iid) != m_result.end();
-	}
-	bool IsResultOK(size_t iid) {
-		AutoLocker _(this->lk_result);
-		auto it = m_result.find(iid);
-		if (it != m_result.end()) {
-			return it->second == "";
-		} return false;
-	}
-	ESTR GetResultSync(size_t iid) {
-		AutoLocker _(this->lk_result);
-		return m_result.find(iid)->second;
-	}
-
 private:
-	// postcode 请求代码
-	size_t m_postcode; Locker lk_postcode;
 
 	// websocket客户端端口
 	int m_wscilentport;
 
-	std::map<size_t, estr> m_result; Locker lk_result;
-	// Concurrency::concurrent_unordered_map<size_t, estr>m_result; Locker lk_result;
+	// hostnumber主人QQ号
+	long long m_hostnumber; 
+
+	// postcode 请求代码
+	size_t m_postcode; Locker lk_postcode;
+
+	// 取请求代码
+	size_t QCode() {
+		AutoLocker _(lk_postcode);
+		return m_postcode++;
+	}
 } CQ;
 
 size_t CQ_SFM(IINT friends, PCSTR msg) {
@@ -176,46 +193,14 @@ size_t CQ_SGL(IINT group) {
     "group_id": %Id
 })", group));
 }
-void CQ_QMSG(IINT message_id) {
-	CQ.SendWes(ESTR(R"({
-"echo": "get_msg",
-"action": "get_msg",
-"params": {
-    "message_id": %Id
-})", message_id));
-}
 
 size_t CQ_Send(IINT nQG, PCSTR fmt, ...) {
 	va_list va; va_start(va, fmt);
 	return CQ_SGM(nQG, ESTR(va, fmt));
 }
 
-ESTR CQ_OpenUrl(PCSTR sUrl) {
-	return WS::OpenUrl(sUrl);
-}
-// CQ_Api for get data
-BOOL CQ_Api(Json& js, PCSTR nUrl) {
-	WDS(einfunc "%s", nUrl);
-	ESTR esr = WS::OpenUrl(ESTR("%s%s", CQ_POST, nUrl));
-	return esr ? (js.parse(esr, esr.size())) : FALSE;
-}
-ESTR CQ_QNick(PCSTR nQQ) { Json js;
-	if (CQ_Api(js, ESTR("get_stranger_info?user_id=%s", nQQ))) {
-		if (js["data"].has("nickname")) return *js["data"]["nickname"];
-	}
-	return "";
-}
-ESTR CQ_QGroupName(PCSTR nQG) {
-	Json js; CQ_Api(js, ESTR("get_group_info?group_id=%s", nQG));
-	return (js.has("group_name"))?(PSTR)js["group_name"]:(PSTR)"";
-}
+BOOL Initalization(PCSTR _goPath, int wsPort, iint iihost) {
 
-BOOL Initalization(PCSTR _goPath, int wsPort) {
-	#if CQ_LOCAL
-		DAS("[WARN] CQ_LOCAL 127.0.0.1 ON")
-	#else
-	DAS("[WARN] CQ_REMOTE cs.re4gs.cn ON")
-#endif
 	static auto CQ_Port = wsPort;
 	static ESTR goLaunch = _goPath;
 	static ESTR goDir = WD::GetPathDir(goLaunch);
@@ -224,11 +209,9 @@ BOOL Initalization(PCSTR _goPath, int wsPort) {
 		WD::MBErr("CQ路径无效!\n\n%s", goLaunch.data());
 		WD::ExitProc();
 		return FALSE;
-	}
+	} goLaunch.append(" -faststart");
 
-	CQ.Listen(wsPort);
-	goLaunch.append(" -faststart");
-
+	CQ.StartService(iihost,wsPort);
 	WD::BeginThread([](intr) {
 		while (1) {
 			if (CQ.IsAlive()) {
@@ -265,16 +248,19 @@ int main(int arg, char* argv[]) {
 
 	WD::UConsole();
 
-	// GlobalConfig
+	// GlobalConfigInit 
 	WD::InitIni(L"./cgo.ini");
+	{
+		char sPath[0x200];
+		int port; long long host;
+		WD::GetIni(L"GC", L"CQ_PortWs", port, 8080);
 
-	int port;
-	WD::GetIni(L"GC", L"WS端口", port, 8080);
+		WD::GetIniString(L"GC", L"CQ_Host", sPath, 0x200); host = atoll(sPath);
 
-	char sPath[0x200];
-	WD::GetIniString(L"GC", L"CQ路径", sPath, 0x200);
+		WD::GetIniString(L"GC", L"CQ_Path", sPath, 0x200);
 
-	Initalization(sPath, port);
+		Initalization(sPath, port, host);
+	}
 
 	static CHAR tmp[MEM_GRANULARITY];
 	HANDLE hin = ::GetStdHandle(STD_INPUT_HANDLE);
@@ -293,7 +279,7 @@ int main(int arg, char* argv[]) {
 				case 't': case 'tt': case 'ttt': case "chm"_uu: { // cq host message
 					CAW("CQ_HOST_MSG");
 
-					CQ_SFM(CQ_HOST, ESTR("%d", WD::Tick(8)));
+					CQ_SFM(CQ.gethost(), ESTR("%d", WD::Tick(8)));
 					break;
 				}
 				
@@ -326,3 +312,30 @@ int main(int arg, char* argv[]) {
 	} while (true);
 }
 
+#if 0
+
+#define CQ_POST "127.0.0.1:5700"
+
+ESTR CQ_OpenUrl(PCSTR sUrl) {
+	return WS::OpenUrl(sUrl);
+}
+
+// CQ_Api for get data
+BOOL CQ_Api(Json& js, PCSTR nUrl) {
+	WDS(einfunc "%s", nUrl);
+	ESTR esr = WS::OpenUrl(ESTR("%s%s", CQ_POST, nUrl));
+	return esr ? (js.parse(esr, esr.size())) : FALSE;
+}
+ESTR CQ_QNick(PCSTR nQQ) {
+	Json js;
+	if (CQ_Api(js, ESTR("get_stranger_info?user_id=%s", nQQ))) {
+		if (js["data"].has("nickname")) return *js["data"]["nickname"];
+	}
+	return "";
+}
+ESTR CQ_QGroupName(PCSTR nQG) {
+	Json js; CQ_Api(js, ESTR("get_group_info?group_id=%s", nQG));
+	return (js.has("group_name")) ? (PSTR)js["group_name"] : (PSTR)"";
+}
+
+#endif
